@@ -16,7 +16,7 @@
 #define PRIORITY_TASK_2  (tskIDLE_PRIORITY+1) 
 #define PRIORITY_TASK_3  (tskIDLE_PRIORITY+2)
 #define PRIORITY_TASK_4  (tskIDLE_PRIORITY+2) 
-#define PRIORITY_TASK_5  (tskIDLE_PRIORITY+3)
+#define PRIORITY_TASK_5  (tskIDLE_PRIORITY+3) //Priorité la plus élevée car nécessite des données de toutes les autres tâches
 
 //Déclaration des queues
 QueueHandle_t SendToTask3_1;
@@ -35,8 +35,6 @@ typedef struct valeurCapteurs
     double tempsEnMillisecondes;
 }valeurCapteurs;
 
-unsigned long startTime;  
-
 
 void setup()
 {
@@ -51,7 +49,7 @@ void setup()
   //Initialisation du sémaphore
   sem = xSemaphoreCreateBinary();
 
-  //Définition des queues
+  //Création des queues
   SendToTask3_1 = xQueueCreate(1, sizeof(int)); //File d'attente pour envoyer des données de la tâche 1 à la tâche 3
   SendToTask3_2 = xQueueCreate(1, sizeof(int)); //File d'attente pour envoyer des données de la tâche 2 à la tâche 3
   SendToTask4 = xQueueCreate(1, sizeof(valeurCapteurs)); //File d'attente pour envoyer des données de la tâche 3 à la tâche 4
@@ -64,7 +62,7 @@ void setup()
   xTaskCreate(tache4, "tache4", 1000, NULL, PRIORITY_TASK_4, NULL);   //Tâche 4
   xTaskCreate(tache5, "tache5", 1000, NULL, PRIORITY_TASK_5, NULL);   //Tâche 5
 
-  //Création de l'ordonnanceur
+  //Appel de l'ordonnanceur
   vTaskStartScheduler(); 
 }    
 
@@ -73,9 +71,8 @@ void tache1(void* pvParameters) //Fonction pour la tâche 1 : lit la valeur du p
     while (1)
   {
     int analogValue = analogRead(ANALOG);
-    int outputValue = analogValue;
 
-    xQueueSend(SendToTask3_1, &outputValue, portMAX_DELAY);
+    xQueueSend(SendToTask3_1, &analogValue, portMAX_DELAY); //File pour envoyer à la tâche 3
   }
 }
 
@@ -87,7 +84,7 @@ void tache2(void* pvParameters) //Fonction pour la tâche 2 : calcule la résult
     int button2State = digitalRead(BUTTON2);
     int digitalValue = button1State + button2State;
 
-    xQueueSend(SendToTask3_2, &digitalValue, portMAX_DELAY);
+    xQueueSend(SendToTask3_2, &digitalValue, portMAX_DELAY); //File pour envoyer à la tâche 3
   }
 }
 
@@ -101,14 +98,14 @@ void tache3(void* pvParameters) //Fonction pour la tâche 3 : réception des don
     int receivedAnalogValue;
     int receivedDigitalValue;
 
-    xQueueReceive(SendToTask3_1, &receivedAnalogValue, portMAX_DELAY);
-    xQueueReceive(SendToTask3_2, &receivedDigitalValue, portMAX_DELAY);
+    xQueueReceive(SendToTask3_1, &receivedAnalogValue, portMAX_DELAY); //Réception donnée de la tâche 1
+    xQueueReceive(SendToTask3_2, &receivedDigitalValue, portMAX_DELAY); //Réception donnée de la tâche 2
 
     structValeurs.analogique = receivedAnalogValue;
     structValeurs.numerique = receivedDigitalValue;
     structValeurs.tempsEnMillisecondes = startTime;
 
-    xQueueSend(SendToTask4, &structValeurs, portMAX_DELAY);
+    xQueueSend(SendToTask4, &structValeurs, portMAX_DELAY); //Envoi de la structure à la tâche 4
   }
 }
 
@@ -117,7 +114,7 @@ void tache4(void* pvParameters)   //Fonction pour la tâche 4 : reçoit la struc
   while(1)
   {
     valeurCapteurs structValeurs;
-    xQueueReceive(SendToTask4, &structValeurs, portMAX_DELAY);
+    xQueueReceive(SendToTask4, &structValeurs, portMAX_DELAY); //Réception de la structure de la tâche 3
 
     //Affichage sur le port série
     Serial.println("**********TACHE 4**********");
@@ -128,9 +125,9 @@ void tache4(void* pvParameters)   //Fonction pour la tâche 4 : reçoit la struc
     Serial.print("Temps écoulé (en ms) : ");
     Serial.println(structValeurs.tempsEnMillisecondes);
 
-    xQueueSend(SendToTask5, &structValeurs, portMAX_DELAY);
+    xQueueSend(SendToTask5, &structValeurs, portMAX_DELAY); //Envoi de la structure à la tâche 5
 
-    xSemaphoreGive(sem);  // Ouverture du sémaphore pour débloquer la tâche 5
+    xSemaphoreGive(sem);  //Ouverture du sémaphore pour débloquer la tâche 5
 
     //Temporisation
     vTaskDelay(50);
@@ -145,7 +142,7 @@ void tache5(void* pvParameters)   //Fonction pour la tâche 5 : reçoit la struc
 
     valeurCapteurs structValeurs;
 
-    xQueueReceive(SendToTask5, &structValeurs, portMAX_DELAY);
+    xQueueReceive(SendToTask5, &structValeurs, portMAX_DELAY); //Réception de la structure de la tâche 4
 
     //Conversion du temps (en ms) en minutes
     structValeurs.tempsEnMillisecondes = structValeurs.tempsEnMillisecondes*(0.001/60);
